@@ -34,9 +34,9 @@ class EventHandler(AssistantEventHandler):
                 citations.append(f"[{index}] {cited_file.filename}")
         self.result += message_content.value + "\n" + "\n".join(citations)
 
-def analyze_financial_statements(files, state, state_chatbot, text):
+def analyze_financial_statements(files, question):
     if not files:
-        return state + [{"role": "이전 질문", "content": text}, {"role": "이전 답변", "content": "재무제표 파일을 업로드해주세요."}], state_chatbot + [(text, "재무제표 파일을 업로드해주세요.")]
+        return "재무제표 파일을 업로드해주세요."
 
     assistant = client.beta.assistants.create(
         name="재무제표 분석 전문 Assistant",
@@ -54,7 +54,7 @@ def analyze_financial_statements(files, state, state_chatbot, text):
 10. 종합적인 재무 건전성 평가: 위의 모든 요소를 종합하여 기업의 전반적인 재무 상태와 미래 전망에 대해 의견을 제시하세요.
 
 사용자의 질문에 따라 관련 재무 지표를 계산하고, 결과를 해석하여 제시해주세요. 필요한 경우 Python 코드를 사용하여 계산을 수행하고, 결과를 시각화할 수 있습니다. 항상 분석의 근거와 함께 명확하고 이해하기 쉬운 설명을 제공해주세요.""",
-        model="gpt-4o",
+        model="gpt-4-1106-preview",
         tools=[{"type": "code_interpreter"}, {"type": "retrieval"}],
     )
 
@@ -72,7 +72,7 @@ def analyze_financial_statements(files, state, state_chatbot, text):
         messages=[
             {
                 "role": "user",
-                "content": text,
+                "content": question,
             }
         ]
     )
@@ -88,51 +88,30 @@ def analyze_financial_statements(files, state, state_chatbot, text):
             pass
 
     result = event_handler.result
-    new_state = state + [{"role": "이전 질문", "content": text}, {"role": "이전 답변", "content": result}]
-    new_state_chatbot = state_chatbot + [(text, result)]
 
     # 리소스 정리
     for file_id in file_ids:
         client.files.delete(file_id)
     client.beta.assistants.delete(assistant.id)
 
-    return new_state, new_state_chatbot
+    return result
 
 st.title("재무제표 및 손익계산서 분석 전문 챗봇")
 
-if 'state' not in st.session_state:
-    st.session_state.state = [
-        {"role": "맥락", "content": "재무제표 및 손익계산서 분석 전문 AI입니다."},
-        {"role": "명령어", "content": "당신은 재무 분석 전문가입니다."}
-    ]
-
-if 'state_chatbot' not in st.session_state:
-    st.session_state.state_chatbot = []
-
 uploaded_files = st.file_uploader("재무제표 파일 업로드 (PDF, Excel, CSV 등)", accept_multiple_files=True, type=["pdf", "xlsx", "csv", "xls", "txt"])
 
-question = st.text_input("재무제표에 대해 질문하세요. (예: '최근 3년간의 수익성 추세를 분석해주세요.')", key="question_input")
+question = st.text_input("재무제표에 대해 질문하세요. (예: '최근 3년간의 수익성 추세를 분석해주세요.')")
 
 if st.button("분석 시작"):
-    if question:
+    if question and uploaded_files:
         with st.spinner("재무제표를 분석 중입니다..."):
-            st.session_state.state, st.session_state.state_chatbot = analyze_financial_statements(
-                uploaded_files, 
-                st.session_state.state, 
-                st.session_state.state_chatbot, 
-                question
-            )
-
-        # 채팅 히스토리 표시
-        for user_msg, ai_msg in st.session_state.state_chatbot:
-            st.text_area("질문", user_msg, height=100, disabled=True)
-            st.text_area("분석 결과", ai_msg, height=300, disabled=True)
-            st.markdown("---")
+            result = analyze_financial_statements(uploaded_files, question)
+        st.subheader("분석 결과")
+        st.write(result)
+    elif not uploaded_files:
+        st.warning("재무제표 파일을 업로드해주세요.")
     else:
         st.warning("재무제표에 대한 질문을 입력해주세요.")
-
-# 입력 필드 초기화
-st.session_state.question_input = ""
 
 # 추가 정보 제공
 st.sidebar.title("사용 가이드")
