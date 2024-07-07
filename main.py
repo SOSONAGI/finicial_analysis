@@ -45,7 +45,15 @@ def analyze_financial_statements(files):
         elif file.name.endswith('.xlsx'):
             df = pd.read_excel(file)
         # 필요한 재무 분석을 여기서 수행
-        results.append(df.describe())  # 예시로 데이터 설명을 반환
+        # 예시로 주요 재무 비율 계산
+        analysis = {
+            "유동비율": df["유동자산"].sum() / df["유동부채"].sum(),
+            "당좌비율": (df["유동자산"].sum() - df["재고자산"].sum()) / df["유동부채"].sum(),
+            "부채비율": df["총부채"].sum() / df["자기자본"].sum(),
+            "매출총이익률": df["매출총이익"].sum() / df["매출액"].sum(),
+            "순이익률": df["순이익"].sum() / df["매출액"].sum(),
+        }
+        results.append(analysis)
     return results
 
 
@@ -57,22 +65,19 @@ def rag_files(files, state, state_chatbot, text):
         return state, state_chatbot, state_chatbot
 
     assistant = client.beta.assistants.create(
-        name="한솔데코 GPT 문서 Assistant Chat",
-        instructions="당신은 한국어 문서 분석 최고 전문가 입니다. 당신의 학습 지식등을 기반하여 모든 한국어 문서 및 이미지에 대해 한국어로 친절히 답변하고, 코드 작성 또한 완벽히 markdown 형식으로 제공해 주시기 바랍니다.",
+        name="재무 분석 GPT Assistant",
+        instructions="당신은 한국어 재무제표 분석 전문가입니다. 모든 재무 문서 및 데이터를 분석하고, 한국어로 명확하고 자세히 설명해 주세요. 또한 관련 재무 비율을 계산하고 설명해 주세요.",
         model="gpt-4o",
         tools=[{"type": "code_interpreter"}, {"type": "file_search"}],
     )
 
-    vector_store = client.beta.vector_stores.create(name="한국어 문서 분석 AI 챗봇")
+    vector_store = client.beta.vector_stores.create(name="재무 문서 분석 AI 챗봇")
 
     file_streams = [open(file.name, "rb") for file in files]
 
     file_batch = client.beta.vector_stores.file_batches.upload_and_poll(
         vector_store_id=vector_store.id, files=file_streams
     )
-
-    print(file_batch.status)
-    print(file_batch.file_counts)
 
     assistant = client.beta.assistants.update(
         assistant_id=assistant.id,
@@ -87,8 +92,6 @@ def rag_files(files, state, state_chatbot, text):
             }
         ]
     )
-
-    print(thread.tool_resources.file_search)
 
     event_handler = EventHandler()
     with client.beta.threads.runs.stream(
@@ -109,11 +112,11 @@ def rag_files(files, state, state_chatbot, text):
 
 
 # Streamlit UI
-st.title("한솔데코 GPT 재무제표 분석 챗봇")
+st.title("재무제표 분석 GPT 챗봇")
 
 state = st.session_state.get('state', [
     {"role": "맥락", "content": "모델 설명..."},
-    {"role": "명령어", "content": "당신은 한솔데코 GPT Assistant 입니다."}
+    {"role": "명령어", "content": "당신은 재무제표 분석 GPT Assistant 입니다."}
 ])
 state_chatbot = st.session_state.get('state_chatbot', [])
 
