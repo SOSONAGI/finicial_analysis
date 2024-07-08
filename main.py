@@ -83,8 +83,8 @@ def rag_files(files, state, state_chatbot, text):
         assistant = client.beta.assistants.create(
             name="재무 분석 GPT Assistant",
             instructions="당신은 한국어 재무제표 분석 전문가입니다. 모든 재무 문서 및 데이터를 분석하고, 한국어로 명확하고 자세히 설명해 주세요. 또한 관련 재무 비율을 계산하고 설명해 주세요.",
-            model="gpt-4o",  # gpt-4o가 현재 존재하지 않아 gpt-4-turbo-preview로 대체
-            tools=[{"type": "code_interpreter"}, {"type": "retrieval"}],
+            model="gpt-4o",
+            tools=[{"type": "code_interpreter"}, {"type": "file_search"}],
         )
 
         file_ids = []
