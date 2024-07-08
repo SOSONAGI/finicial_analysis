@@ -181,7 +181,8 @@ if balance_sheet_df is not None and income_statement_df is not None:
                 model="claude-3-sonnet-20240229",
                 max_tokens=1000,
                 messages=[
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": system_prompt}
+                ] + [
                     {"role": m["role"], "content": m["content"]}
                     for m in st.session_state.messages
                 ],
