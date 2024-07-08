@@ -84,8 +84,8 @@ if uploaded_file is not None:
             message = client.messages.create(
                 model="claude-3-sonnet-20240229",
                 max_tokens=3000,
+                system=system_prompt,
                 messages=[
-                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": human_prompt}
                 ]
             )
