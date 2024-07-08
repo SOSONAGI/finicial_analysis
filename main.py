@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import anthropic
 import os
+import json
 
 # Streamlit 앱 설정
 st.set_page_config(page_title="재무제표 분석 도구", layout="wide")
@@ -68,9 +69,9 @@ if uploaded_file is not None:
         prompt = f"""
         다음은 회사의 재무제표 데이터입니다:
         
-        {df.to_string()}
+        {df.to_json(orient='split')}
         
-        이 데이터를 바탕으로 회사의 재무 상태를 분석하고, 향후 3년간의 예측을 해주세요. 
+        이 JSON 형식의 데이터를 바탕으로 회사의 재무 상태를 분석하고, 향후 3년간의 예측을 해주세요. 
         다음 항목들에 대해 자세히 설명해주세요:
         1. 성장성
         2. 수익성
@@ -80,13 +81,17 @@ if uploaded_file is not None:
         6. 종합 평가 및 제언
         """
         
-        response = client.completions.create(
-            model="claude-3-sonnet-20240229",
-            prompt=prompt,
-            max_tokens_to_sample=4000,
-        )
-        
-        st.write(response.completion)
+        try:
+            response = client.completions.create(
+                model="claude-3-sonnet-20240229",
+                prompt=prompt,
+                max_tokens_to_sample=3000,
+            )
+            st.write(response.completion)
+        except anthropic.BadRequestError as e:
+            st.error(f"API 요청 오류: {str(e)}")
+        except Exception as e:
+            st.error(f"예상치 못한 오류 발생: {str(e)}")
 
 else:
     st.info('파일을 업로드해주세요.')
