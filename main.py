@@ -1,21 +1,19 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import anthropic
-import os
-import json
+import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import anthropic
 
 # Streamlit 앱 설정
 st.set_page_config(page_title="재무제표 분석 도구", layout="wide")
 
-# CSS를 사용한 스타일 개선
+# CSS 스타일
 st.markdown("""
 <style>
     .reportview-container {
-        background-color: #f0f2f6;
+        background-color: #1E1E1E;
+        color: white;
     }
     .main .block-container {
         padding-top: 2rem;
@@ -24,14 +22,15 @@ st.markdown("""
         padding-right: 5rem;
     }
     h1, h2, h3 {
-        color: #1f4068;
+        color: #4CAF50;
     }
     .stButton>button {
-        background-color: #4e89ae;
+        background-color: #4CAF50;
         color: white;
     }
     .stTextInput>div>div>input {
-        background-color: #f8f9fa;
+        background-color: #2C2C2C;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -73,65 +72,38 @@ if balance_sheet_df is not None and income_statement_df is not None:
     st.success("재무제표가 성공적으로 업로드되었습니다!")
 
     # 주요 재무 지표 계산
-    if '자산총계' in balance_sheet_df.index:
-        total_assets = balance_sheet_df.loc['자산총계']
-    else:
-        st.warning("재무상태표에서 '자산총계'를 찾을 수 없습니다.")
-        total_assets = pd.Series()
-
-    if '부채총계' in balance_sheet_df.index:
-        total_liabilities = balance_sheet_df.loc['부채총계']
-    else:
-        st.warning("재무상태표에서 '부채총계'를 찾을 수 없습니다.")
-        total_liabilities = pd.Series()
-
-    if '자본총계' in balance_sheet_df.index:
-        total_equity = balance_sheet_df.loc['자본총계']
-    else:
-        st.warning("재무상태표에서 '자본총계'를 찾을 수 없습니다.")
-        total_equity = pd.Series()
-
+    total_assets = balance_sheet_df.loc['자산총계'] if '자산총계' in balance_sheet_df.index else pd.Series()
+    total_liabilities = balance_sheet_df.loc['부채총계'] if '부채총계' in balance_sheet_df.index else pd.Series()
+    total_equity = balance_sheet_df.loc['자본총계'] if '자본총계' in balance_sheet_df.index else pd.Series()
     net_income = income_statement_df['Net Loss']
     revenue = income_statement_df['Sales']
     
+    # NaN 값 처리
+    total_assets = total_assets.fillna(0)
+    total_liabilities = total_liabilities.fillna(0)
+    total_equity = total_equity.fillna(0)
+    net_income = net_income.fillna(0)
+    revenue = revenue.fillna(0)
+
     # 재무 비율 계산
-    if not total_assets.empty and not total_liabilities.empty:
-        debt_ratio = total_liabilities / total_assets * 100
-    else:
-        debt_ratio = pd.Series()
-
-    if not total_assets.empty and not total_equity.empty:
-        equity_ratio = total_equity / total_assets * 100
-    else:
-        equity_ratio = pd.Series()
-
-    if not total_equity.empty:
-        roe = net_income / total_equity * 100
-    else:
-        roe = pd.Series()
-
-    profit_margin = net_income / revenue * 100
+    debt_ratio = (total_liabilities / total_assets * 100).replace([np.inf, -np.inf], np.nan).fillna(0)
+    equity_ratio = (total_equity / total_assets * 100).replace([np.inf, -np.inf], np.nan).fillna(0)
+    roe = (net_income / total_equity * 100).replace([np.inf, -np.inf], np.nan).fillna(0)
+    profit_margin = (net_income / revenue * 100).replace([np.inf, -np.inf], np.nan).fillna(0)
     
     # 결과 표시
     st.header("📈 주요 재무 지표")
     col1, col2, col3, col4 = st.columns(4)
-    
-    if not total_assets.empty:
-        col1.metric("총자산", f"{total_assets.iloc[-1]:,.0f}원", f"{total_assets.iloc[-1] - total_assets.iloc[-2]:,.0f}원")
-    if not total_liabilities.empty:
-        col2.metric("총부채", f"{total_liabilities.iloc[-1]:,.0f}원", f"{total_liabilities.iloc[-1] - total_liabilities.iloc[-2]:,.0f}원")
-    if not total_equity.empty:
-        col3.metric("총자본", f"{total_equity.iloc[-1]:,.0f}원", f"{total_equity.iloc[-1] - total_equity.iloc[-2]:,.0f}원")
+    col1.metric("총자산", f"{total_assets.iloc[-1]:,.0f}원", f"{total_assets.iloc[-1] - total_assets.iloc[-2]:,.0f}원")
+    col2.metric("총부채", f"{total_liabilities.iloc[-1]:,.0f}원", f"{total_liabilities.iloc[-1] - total_liabilities.iloc[-2]:,.0f}원")
+    col3.metric("총자본", f"{total_equity.iloc[-1]:,.0f}원", f"{total_equity.iloc[-1] - total_equity.iloc[-2]:,.0f}원")
     col4.metric("당기순이익", f"{net_income.iloc[-1]:,.0f}원", f"{net_income.iloc[-1] - net_income.iloc[-2]:,.0f}원")
     
     st.header("💹 재무 비율")
     col1, col2, col3, col4 = st.columns(4)
-    if not debt_ratio.empty:
-        col1.metric("부채비율", f"{debt_ratio.iloc[-1]:.2f}%", f"{debt_ratio.iloc[-1] - debt_ratio.iloc[-2]:.2f}%")
-    if not equity_ratio.empty:
-        col2.metric("자기자본비율", f"{equity_ratio.iloc[-1]:.2f}%", f"{equity_ratio.iloc[-1] - equity_ratio.iloc[-2]:.2f}%")
-    if not roe.empty:
-        col3.metric("ROE", f"{roe.iloc[-1]:.2f}%", f"{roe.iloc[-1] - roe.iloc[-2]:.2f}%")
+    col1.metric("부채비율", f"{debt_ratio.iloc[-1]:.2f}%", f"{debt_ratio.iloc[-1] - debt_ratio.iloc[-2]:.2f}%")
+    col2.metric("자기자본비율", f"{equity_ratio.iloc[-1]:.2f}%", f"{equity_ratio.iloc[-1] - equity_ratio.iloc[-2]:.2f}%")
+    col3.metric("ROE", f"{roe.iloc[-1]:.2f}%", f"{roe.iloc[-1] - roe.iloc[-2]:.2f}%")
     col4.metric("순이익률", f"{profit_margin.iloc[-1]:.2f}%", f"{profit_margin.iloc[-1] - profit_margin.iloc[-2]:.2f}%")
     
     # 그래프 그리기
@@ -143,23 +115,17 @@ if balance_sheet_df is not None and income_statement_df is not None:
     fig.add_trace(go.Scatter(x=net_income.index, y=net_income.values, name='당기순이익'), row=1, col=1)
     
     # 자산/부채/자본 추이
-    if not total_assets.empty:
-        fig.add_trace(go.Scatter(x=total_assets.index, y=total_assets.values, name='총자산'), row=1, col=2)
-    if not total_liabilities.empty:
-        fig.add_trace(go.Scatter(x=total_liabilities.index, y=total_liabilities.values, name='총부채'), row=1, col=2)
-    if not total_equity.empty:
-        fig.add_trace(go.Scatter(x=total_equity.index, y=total_equity.values, name='총자본'), row=1, col=2)
+    fig.add_trace(go.Scatter(x=total_assets.index, y=total_assets.values, name='총자산'), row=1, col=2)
+    fig.add_trace(go.Scatter(x=total_liabilities.index, y=total_liabilities.values, name='총부채'), row=1, col=2)
+    fig.add_trace(go.Scatter(x=total_equity.index, y=total_equity.values, name='총자본'), row=1, col=2)
     
     # 수익성 지표 추이
     fig.add_trace(go.Scatter(x=profit_margin.index, y=profit_margin.values, name='순이익률'), row=2, col=1)
-    if not roe.empty:
-        fig.add_trace(go.Scatter(x=roe.index, y=roe.values, name='ROE'), row=2, col=1)
+    fig.add_trace(go.Scatter(x=roe.index, y=roe.values, name='ROE'), row=2, col=1)
     
     # 재무 비율 추이
-    if not debt_ratio.empty:
-        fig.add_trace(go.Scatter(x=debt_ratio.index, y=debt_ratio.values, name='부채비율'), row=2, col=2)
-    if not equity_ratio.empty:
-        fig.add_trace(go.Scatter(x=equity_ratio.index, y=equity_ratio.values, name='자기자본비율'), row=2, col=2)
+    fig.add_trace(go.Scatter(x=debt_ratio.index, y=debt_ratio.values, name='부채비율'), row=2, col=2)
+    fig.add_trace(go.Scatter(x=equity_ratio.index, y=equity_ratio.values, name='자기자본비율'), row=2, col=2)
     
     fig.update_layout(height=800, width=1000, title_text="재무 지표 종합 분석")
     st.plotly_chart(fig)
@@ -189,8 +155,8 @@ if balance_sheet_df is not None and income_statement_df is not None:
             message = client.messages.create(
                 model="claude-3-sonnet-20240229",
                 max_tokens=3000,
-                system=system_prompt,
                 messages=[
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": human_prompt}
                 ]
             )
@@ -219,20 +185,23 @@ if balance_sheet_df is not None and income_statement_df is not None:
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_response = ""
-            for response in client.messages.stream(
-                model="claude-3-sonnet-20240229",
-                max_tokens=1000,
-                messages=[
-                    {"role": "system", "content": system_prompt}
-                ] + [
-                    {"role": m["role"], "content": m["content"]}
-                    for m in st.session_state.messages
-                ],
-            ):
-                full_response += (response.content or "")
-                message_placeholder.markdown(full_response + "▌")
-            message_placeholder.markdown(full_response)
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+            try:
+                message = client.messages.create(
+                    model="claude-3-sonnet-20240229",
+                    max_tokens=1000,
+                    messages=[
+                        {"role": "system", "content": system_prompt}
+                    ] + st.session_state.messages
+                )
+                full_response = message.content[0].text
+                message_placeholder.markdown(full_response)
+            except anthropic.BadRequestError as e:
+                st.error(f"API 요청 오류: {str(e)}")
+            except Exception as e:
+                st.error(f"예상치 못한 오류 발생: {str(e)}")
+        
+        if full_response:
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 else:
     st.info('재무상태표와 손익계산서를 모두 업로드해주세요.')
