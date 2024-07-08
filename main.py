@@ -56,8 +56,12 @@ def process_financial_statement(file, statement_type):
         else:
             df = pd.read_excel(file)
         
-        df = df.set_index('항목/년도')
-        df = df.apply(lambda x: pd.to_numeric(x.str.replace(',', ''), errors='coerce'))
+        if statement_type == "손익계산서":
+            df = df.set_index('Year')
+        else:
+            df = df.set_index('항목/년도')
+        
+        df = df.apply(pd.to_numeric, errors='coerce')
         return df
     return None
 
@@ -69,55 +73,93 @@ if balance_sheet_df is not None and income_statement_df is not None:
     st.success("재무제표가 성공적으로 업로드되었습니다!")
 
     # 주요 재무 지표 계산
-    total_assets = balance_sheet_df.loc['자산총계']
-    total_liabilities = balance_sheet_df.loc['부채총계']
-    total_equity = balance_sheet_df.loc['자본총계']
-    net_income = income_statement_df.loc['당기순이익']
-    revenue = income_statement_df.loc['매출액']
+    if '자산총계' in balance_sheet_df.index:
+        total_assets = balance_sheet_df.loc['자산총계']
+    else:
+        st.warning("재무상태표에서 '자산총계'를 찾을 수 없습니다.")
+        total_assets = pd.Series()
+
+    if '부채총계' in balance_sheet_df.index:
+        total_liabilities = balance_sheet_df.loc['부채총계']
+    else:
+        st.warning("재무상태표에서 '부채총계'를 찾을 수 없습니다.")
+        total_liabilities = pd.Series()
+
+    if '자본총계' in balance_sheet_df.index:
+        total_equity = balance_sheet_df.loc['자본총계']
+    else:
+        st.warning("재무상태표에서 '자본총계'를 찾을 수 없습니다.")
+        total_equity = pd.Series()
+
+    net_income = income_statement_df['Net Loss']
+    revenue = income_statement_df['Sales']
     
     # 재무 비율 계산
-    debt_ratio = total_liabilities / total_assets * 100
-    equity_ratio = total_equity / total_assets * 100
-    roe = net_income / total_equity * 100
+    if not total_assets.empty and not total_liabilities.empty:
+        debt_ratio = total_liabilities / total_assets * 100
+    else:
+        debt_ratio = pd.Series()
+
+    if not total_assets.empty and not total_equity.empty:
+        equity_ratio = total_equity / total_assets * 100
+    else:
+        equity_ratio = pd.Series()
+
+    if not total_equity.empty:
+        roe = net_income / total_equity * 100
+    else:
+        roe = pd.Series()
+
     profit_margin = net_income / revenue * 100
     
     # 결과 표시
     st.header("📈 주요 재무 지표")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("총자산", f"{total_assets.iloc[-1]:,.0f}원", f"{total_assets.iloc[-1] - total_assets.iloc[-2]:,.0f}원")
-    col2.metric("총부채", f"{total_liabilities.iloc[-1]:,.0f}원", f"{total_liabilities.iloc[-1] - total_liabilities.iloc[-2]:,.0f}원")
-    col3.metric("총자본", f"{total_equity.iloc[-1]:,.0f}원", f"{total_equity.iloc[-1] - total_equity.iloc[-2]:,.0f}원")
+    
+    if not total_assets.empty:
+        col1.metric("총자산", f"{total_assets.iloc[-1]:,.0f}원", f"{total_assets.iloc[-1] - total_assets.iloc[-2]:,.0f}원")
+    if not total_liabilities.empty:
+        col2.metric("총부채", f"{total_liabilities.iloc[-1]:,.0f}원", f"{total_liabilities.iloc[-1] - total_liabilities.iloc[-2]:,.0f}원")
+    if not total_equity.empty:
+        col3.metric("총자본", f"{total_equity.iloc[-1]:,.0f}원", f"{total_equity.iloc[-1] - total_equity.iloc[-2]:,.0f}원")
     col4.metric("당기순이익", f"{net_income.iloc[-1]:,.0f}원", f"{net_income.iloc[-1] - net_income.iloc[-2]:,.0f}원")
     
     st.header("💹 재무 비율")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("부채비율", f"{debt_ratio.iloc[-1]:.2f}%", f"{debt_ratio.iloc[-1] - debt_ratio.iloc[-2]:.2f}%")
-    col2.metric("자기자본비율", f"{equity_ratio.iloc[-1]:.2f}%", f"{equity_ratio.iloc[-1] - equity_ratio.iloc[-2]:.2f}%")
-    col3.metric("ROE", f"{roe.iloc[-1]:.2f}%", f"{roe.iloc[-1] - roe.iloc[-2]:.2f}%")
+    if not debt_ratio.empty:
+        col1.metric("부채비율", f"{debt_ratio.iloc[-1]:.2f}%", f"{debt_ratio.iloc[-1] - debt_ratio.iloc[-2]:.2f}%")
+    if not equity_ratio.empty:
+        col2.metric("자기자본비율", f"{equity_ratio.iloc[-1]:.2f}%", f"{equity_ratio.iloc[-1] - equity_ratio.iloc[-2]:.2f}%")
+    if not roe.empty:
+        col3.metric("ROE", f"{roe.iloc[-1]:.2f}%", f"{roe.iloc[-1] - roe.iloc[-2]:.2f}%")
     col4.metric("순이익률", f"{profit_margin.iloc[-1]:.2f}%", f"{profit_margin.iloc[-1] - profit_margin.iloc[-2]:.2f}%")
     
     # 그래프 그리기
     st.header("📊 재무 지표 추이")
-    fig = make_subplots(rows=2, cols=2, subplot_titles=("자산/부채/자본 추이", "수익성 지표 추이", "재무 비율 추이", "현금 흐름 추이"))
+    fig = make_subplots(rows=2, cols=2, subplot_titles=("매출 및 순이익 추이", "자산/부채/자본 추이", "수익성 지표 추이", "재무 비율 추이"))
+    
+    # 매출 및 순이익 추이
+    fig.add_trace(go.Scatter(x=revenue.index, y=revenue.values, name='매출액'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=net_income.index, y=net_income.values, name='당기순이익'), row=1, col=1)
     
     # 자산/부채/자본 추이
-    fig.add_trace(go.Scatter(x=total_assets.index, y=total_assets.values, name='총자산'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=total_liabilities.index, y=total_liabilities.values, name='총부채'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=total_equity.index, y=total_equity.values, name='총자본'), row=1, col=1)
+    if not total_assets.empty:
+        fig.add_trace(go.Scatter(x=total_assets.index, y=total_assets.values, name='총자산'), row=1, col=2)
+    if not total_liabilities.empty:
+        fig.add_trace(go.Scatter(x=total_liabilities.index, y=total_liabilities.values, name='총부채'), row=1, col=2)
+    if not total_equity.empty:
+        fig.add_trace(go.Scatter(x=total_equity.index, y=total_equity.values, name='총자본'), row=1, col=2)
     
     # 수익성 지표 추이
-    fig.add_trace(go.Scatter(x=net_income.index, y=net_income.values, name='당기순이익'), row=1, col=2)
-    fig.add_trace(go.Scatter(x=revenue.index, y=revenue.values, name='매출액'), row=1, col=2)
+    fig.add_trace(go.Scatter(x=profit_margin.index, y=profit_margin.values, name='순이익률'), row=2, col=1)
+    if not roe.empty:
+        fig.add_trace(go.Scatter(x=roe.index, y=roe.values, name='ROE'), row=2, col=1)
     
     # 재무 비율 추이
-    fig.add_trace(go.Scatter(x=debt_ratio.index, y=debt_ratio.values, name='부채비율'), row=2, col=1)
-    fig.add_trace(go.Scatter(x=equity_ratio.index, y=equity_ratio.values, name='자기자본비율'), row=2, col=1)
-    fig.add_trace(go.Scatter(x=roe.index, y=roe.values, name='ROE'), row=2, col=1)
-    
-    # 현금 흐름 추이 (예시, 실제 데이터에 맞게 조정 필요)
-    if '영업활동현금흐름' in balance_sheet_df.index:
-        operating_cash_flow = balance_sheet_df.loc['영업활동현금흐름']
-        fig.add_trace(go.Scatter(x=operating_cash_flow.index, y=operating_cash_flow.values, name='영업활동현금흐름'), row=2, col=2)
+    if not debt_ratio.empty:
+        fig.add_trace(go.Scatter(x=debt_ratio.index, y=debt_ratio.values, name='부채비율'), row=2, col=2)
+    if not equity_ratio.empty:
+        fig.add_trace(go.Scatter(x=equity_ratio.index, y=equity_ratio.values, name='자기자본비율'), row=2, col=2)
     
     fig.update_layout(height=800, width=1000, title_text="재무 지표 종합 분석")
     st.plotly_chart(fig)
