@@ -5,71 +5,134 @@ import seaborn as sns
 import anthropic
 import os
 import json
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Streamlit 앱 설정
 st.set_page_config(page_title="재무제표 분석 도구", layout="wide")
-st.title("재무제표 분석 도구")
+
+# CSS를 사용한 스타일 개선
+st.markdown("""
+<style>
+    .reportview-container {
+        background-color: #f0f2f6;
+    }
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        padding-left: 5rem;
+        padding-right: 5rem;
+    }
+    h1, h2, h3 {
+        color: #1f4068;
+    }
+    .stButton>button {
+        background-color: #4e89ae;
+        color: white;
+    }
+    .stTextInput>div>div>input {
+        background-color: #f8f9fa;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# 앱 제목
+st.title("🚀 고급 재무제표 분석 도구")
 
 # Anthropic API 키 설정
 api_key = st.secrets["ANTHROPIC_API_KEY"]
 client = anthropic.Anthropic(api_key=api_key)
 
-# 파일 업로드
-uploaded_file = st.file_uploader("재무제표 파일을 업로드하세요 (CSV 또는 Excel)", type=["csv", "xlsx"])
+# 사이드바 설정
+st.sidebar.header("📊 데이터 업로드")
+balance_sheet = st.sidebar.file_uploader("재무상태표 업로드 (CSV 또는 Excel)", type=["csv", "xlsx"])
+income_statement = st.sidebar.file_uploader("손익계산서 업로드 (CSV 또는 Excel)", type=["csv", "xlsx"])
 
-if uploaded_file is not None:
-    # 파일 읽기
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
-    
-    # 데이터 전처리
-    df = df.set_index('항목/년도')
-    df = df.apply(lambda x: pd.to_numeric(x.str.replace(',', ''), errors='coerce'))
-    
+# 데이터 처리 함수
+def process_financial_statement(file, statement_type):
+    if file is not None:
+        if file.name.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+        
+        df = df.set_index('항목/년도')
+        df = df.apply(lambda x: pd.to_numeric(x.str.replace(',', ''), errors='coerce'))
+        return df
+    return None
+
+# 데이터 처리
+balance_sheet_df = process_financial_statement(balance_sheet, "재무상태표")
+income_statement_df = process_financial_statement(income_statement, "손익계산서")
+
+if balance_sheet_df is not None and income_statement_df is not None:
+    st.success("재무제표가 성공적으로 업로드되었습니다!")
+
     # 주요 재무 지표 계산
-    total_assets = df.loc['자산총계']
-    total_liabilities = df.loc['부채총계']
-    total_equity = df.loc['자본총계']
-    net_income = df.loc['(당기순손실)']
+    total_assets = balance_sheet_df.loc['자산총계']
+    total_liabilities = balance_sheet_df.loc['부채총계']
+    total_equity = balance_sheet_df.loc['자본총계']
+    net_income = income_statement_df.loc['당기순이익']
+    revenue = income_statement_df.loc['매출액']
     
     # 재무 비율 계산
     debt_ratio = total_liabilities / total_assets * 100
     equity_ratio = total_equity / total_assets * 100
     roe = net_income / total_equity * 100
+    profit_margin = net_income / revenue * 100
     
     # 결과 표시
-    st.subheader("주요 재무 지표")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("총자산", f"{total_assets.iloc[-1]:,.0f}")
-    col2.metric("총부채", f"{total_liabilities.iloc[-1]:,.0f}")
-    col3.metric("총자본", f"{total_equity.iloc[-1]:,.0f}")
+    st.header("📈 주요 재무 지표")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("총자산", f"{total_assets.iloc[-1]:,.0f}원", f"{total_assets.iloc[-1] - total_assets.iloc[-2]:,.0f}원")
+    col2.metric("총부채", f"{total_liabilities.iloc[-1]:,.0f}원", f"{total_liabilities.iloc[-1] - total_liabilities.iloc[-2]:,.0f}원")
+    col3.metric("총자본", f"{total_equity.iloc[-1]:,.0f}원", f"{total_equity.iloc[-1] - total_equity.iloc[-2]:,.0f}원")
+    col4.metric("당기순이익", f"{net_income.iloc[-1]:,.0f}원", f"{net_income.iloc[-1] - net_income.iloc[-2]:,.0f}원")
     
-    st.subheader("재무 비율")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("부채비율", f"{debt_ratio.iloc[-1]:.2f}%")
-    col2.metric("자기자본비율", f"{equity_ratio.iloc[-1]:.2f}%")
-    col3.metric("ROE", f"{roe.iloc[-1]:.2f}%")
+    st.header("💹 재무 비율")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("부채비율", f"{debt_ratio.iloc[-1]:.2f}%", f"{debt_ratio.iloc[-1] - debt_ratio.iloc[-2]:.2f}%")
+    col2.metric("자기자본비율", f"{equity_ratio.iloc[-1]:.2f}%", f"{equity_ratio.iloc[-1] - equity_ratio.iloc[-2]:.2f}%")
+    col3.metric("ROE", f"{roe.iloc[-1]:.2f}%", f"{roe.iloc[-1] - roe.iloc[-2]:.2f}%")
+    col4.metric("순이익률", f"{profit_margin.iloc[-1]:.2f}%", f"{profit_margin.iloc[-1] - profit_margin.iloc[-2]:.2f}%")
     
     # 그래프 그리기
-    st.subheader("재무 지표 추이")
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(total_assets.index, total_assets.values, label='총자산')
-    ax.plot(total_liabilities.index, total_liabilities.values, label='총부채')
-    ax.plot(total_equity.index, total_equity.values, label='총자본')
-    ax.set_xlabel('연도')
-    ax.set_ylabel('금액')
-    ax.legend()
-    st.pyplot(fig)
+    st.header("📊 재무 지표 추이")
+    fig = make_subplots(rows=2, cols=2, subplot_titles=("자산/부채/자본 추이", "수익성 지표 추이", "재무 비율 추이", "현금 흐름 추이"))
     
-    # Claude를 이용한 상세 분석
-    st.subheader("AI 분석 리포트")
+    # 자산/부채/자본 추이
+    fig.add_trace(go.Scatter(x=total_assets.index, y=total_assets.values, name='총자산'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=total_liabilities.index, y=total_liabilities.values, name='총부채'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=total_equity.index, y=total_equity.values, name='총자본'), row=1, col=1)
+    
+    # 수익성 지표 추이
+    fig.add_trace(go.Scatter(x=net_income.index, y=net_income.values, name='당기순이익'), row=1, col=2)
+    fig.add_trace(go.Scatter(x=revenue.index, y=revenue.values, name='매출액'), row=1, col=2)
+    
+    # 재무 비율 추이
+    fig.add_trace(go.Scatter(x=debt_ratio.index, y=debt_ratio.values, name='부채비율'), row=2, col=1)
+    fig.add_trace(go.Scatter(x=equity_ratio.index, y=equity_ratio.values, name='자기자본비율'), row=2, col=1)
+    fig.add_trace(go.Scatter(x=roe.index, y=roe.values, name='ROE'), row=2, col=1)
+    
+    # 현금 흐름 추이 (예시, 실제 데이터에 맞게 조정 필요)
+    if '영업활동현금흐름' in balance_sheet_df.index:
+        operating_cash_flow = balance_sheet_df.loc['영업활동현금흐름']
+        fig.add_trace(go.Scatter(x=operating_cash_flow.index, y=operating_cash_flow.values, name='영업활동현금흐름'), row=2, col=2)
+    
+    fig.update_layout(height=800, width=1000, title_text="재무 지표 종합 분석")
+    st.plotly_chart(fig)
+    
+    # AI 분석 리포트
+    st.header("🤖 AI 분석 리포트")
     with st.spinner('AI가 분석 중입니다...'):
         system_prompt = "You are a financial analyst expert. Analyze the given financial statement data and provide insights."
         human_prompt = f"""다음은 회사의 재무제표 데이터입니다:
 
-{df.to_json(orient='split')}
+재무상태표:
+{balance_sheet_df.to_json(orient='split')}
+
+손익계산서:
+{income_statement_df.to_json(orient='split')}
 
 이 JSON 형식의 데이터를 바탕으로 회사의 재무 상태를 분석하고, 향후 3년간의 예측을 해주세요. 
 다음 항목들에 대해 자세히 설명해주세요:
@@ -95,5 +158,38 @@ if uploaded_file is not None:
         except Exception as e:
             st.error(f"예상치 못한 오류 발생: {str(e)}")
 
+    # 챗봇 기능
+    st.header("💬 재무 분석 챗봇")
+    st.write("AI 분석 리포트를 기반으로 추가 질문을 해보세요.")
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    if prompt := st.chat_input("질문을 입력하세요"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+            for response in client.messages.stream(
+                model="claude-3-sonnet-20240229",
+                max_tokens=1000,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.messages
+                ],
+            ):
+                full_response += (response.content or "")
+                message_placeholder.markdown(full_response + "▌")
+            message_placeholder.markdown(full_response)
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
+
 else:
-    st.info('파일을 업로드해주세요.')
+    st.info('재무상태표와 손익계산서를 모두 업로드해주세요.')
