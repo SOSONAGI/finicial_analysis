@@ -80,15 +80,16 @@ if uploaded_file is not None:
 5. 향후 3년 예측
 6. 종합 평가 및 제언"""
 
-        prompt = f"{system_prompt}\n\n{anthropic.HUMAN_PROMPT} {human_prompt}{anthropic.AI_PROMPT}"
-        
         try:
-            response = client.completions.create(
+            message = client.messages.create(
                 model="claude-3-sonnet-20240229",
-                prompt=prompt,
-                max_tokens_to_sample=3000,
+                max_tokens=3000,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": human_prompt}
+                ]
             )
-            st.write(response.completion)
+            st.write(message.content[0].text)
         except anthropic.BadRequestError as e:
             st.error(f"API 요청 오류: {str(e)}")
         except Exception as e:
