@@ -149,14 +149,16 @@ if balance_sheet_df is not None and income_statement_df is not None:
 3. 안정성
 4. 효율성
 5. 향후 3년 예측
-6. 종합 평가 및 제언"""
+6. 종합 평가 및 제언
+
+주의: 모든 금액은 원 단위입니다. 분석 시 이를 고려해주세요."""
 
         try:
             message = client.messages.create(
                 model="claude-3-sonnet-20240229",
                 max_tokens=3000,
+                system=system_prompt,
                 messages=[
-                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": human_prompt}
                 ]
             )
@@ -189,9 +191,8 @@ if balance_sheet_df is not None and income_statement_df is not None:
                 message = client.messages.create(
                     model="claude-3-sonnet-20240229",
                     max_tokens=1000,
-                    messages=[
-                        {"role": "system", "content": system_prompt}
-                    ] + st.session_state.messages
+                    system=system_prompt,
+                    messages=st.session_state.messages
                 )
                 full_response = message.content[0].text
                 message_placeholder.markdown(full_response)
