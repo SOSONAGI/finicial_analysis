@@ -83,7 +83,7 @@ if uploaded_file is not None:
         response = client.completions.create(
             model="claude-3-sonnet-20240229",
             prompt=prompt,
-            max_tokens_to_sample=3000,
+            max_tokens_to_sample=4000,
         )
         
         st.write(response.completion)
