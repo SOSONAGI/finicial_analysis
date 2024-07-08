@@ -80,14 +80,13 @@ if uploaded_file is not None:
 5. 향후 3년 예측
 6. 종합 평가 및 제언"""
 
-        prompt = f"{anthropic.HUMAN_PROMPT} {human_prompt}{anthropic.AI_PROMPT}"
+        prompt = f"{system_prompt}\n\n{anthropic.HUMAN_PROMPT} {human_prompt}{anthropic.AI_PROMPT}"
         
         try:
             response = client.completions.create(
                 model="claude-3-sonnet-20240229",
                 prompt=prompt,
                 max_tokens_to_sample=3000,
-                system=system_prompt
             )
             st.write(response.completion)
         except anthropic.BadRequestError as e:
