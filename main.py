@@ -66,26 +66,28 @@ if uploaded_file is not None:
     # Claude를 이용한 상세 분석
     st.subheader("AI 분석 리포트")
     with st.spinner('AI가 분석 중입니다...'):
-        prompt = f"""
-        다음은 회사의 재무제표 데이터입니다:
-        
-        {df.to_json(orient='split')}
-        
-        이 JSON 형식의 데이터를 바탕으로 회사의 재무 상태를 분석하고, 향후 3년간의 예측을 해주세요. 
-        다음 항목들에 대해 자세히 설명해주세요:
-        1. 성장성
-        2. 수익성
-        3. 안정성
-        4. 효율성
-        5. 향후 3년 예측
-        6. 종합 평가 및 제언
-        """
+        system_prompt = "You are a financial analyst expert. Analyze the given financial statement data and provide insights."
+        human_prompt = f"""다음은 회사의 재무제표 데이터입니다:
+
+{df.to_json(orient='split')}
+
+이 JSON 형식의 데이터를 바탕으로 회사의 재무 상태를 분석하고, 향후 3년간의 예측을 해주세요. 
+다음 항목들에 대해 자세히 설명해주세요:
+1. 성장성
+2. 수익성
+3. 안정성
+4. 효율성
+5. 향후 3년 예측
+6. 종합 평가 및 제언"""
+
+        prompt = f"{anthropic.HUMAN_PROMPT} {human_prompt}{anthropic.AI_PROMPT}"
         
         try:
             response = client.completions.create(
                 model="claude-3-sonnet-20240229",
                 prompt=prompt,
                 max_tokens_to_sample=3000,
+                system=system_prompt
             )
             st.write(response.completion)
         except anthropic.BadRequestError as e:
