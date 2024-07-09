@@ -5,3 +5,4 @@ matplotlib
 seaborn
 anthropic
 plotly
+PyPDF2
