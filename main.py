@@ -169,8 +169,8 @@ if balance_sheet_df is not None and income_statement_df is not None:
             message = client.messages.create(
                 model="claude-3-sonnet-20240229",
                 max_tokens=3000,
-                system=system_prompt,
                 messages=[
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": human_prompt}
                 ]
             )
@@ -186,9 +186,12 @@ if balance_sheet_df is not None and income_statement_df is not None:
     st.write("AI 분석 리포트를 기반으로 추가 질문을 해보세요.")
 
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": ai_analysis}]
+        st.session_state.messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "assistant", "content": ai_analysis}
+        ]
 
-    for message in st.session_state.messages:
+    for message in st.session_state.messages[1:]:  # Skip the system message
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
@@ -204,11 +207,7 @@ if balance_sheet_df is not None and income_statement_df is not None:
                 message = client.messages.create(
                     model="claude-3-sonnet-20240229",
                     max_tokens=1000,
-                    system=system_prompt,
-                    messages=[
-                        {"role": "assistant", "content": ai_analysis},
-                        *st.session_state.messages
-                    ]
+                    messages=st.session_state.messages
                 )
                 full_response = message.content[0].text
                 message_placeholder.markdown(full_response)
