@@ -10,7 +10,7 @@ import io
 # Streamlit 앱 설정
 st.set_page_config(page_title="재무제표 분석 도구", layout="wide")
 
-# CSS 스타일 (이전과 동일)
+# CSS 스타일
 st.markdown("""
 <style>
     .reportview-container {
@@ -84,7 +84,7 @@ additional_info_text = extract_text_from_pdf(additional_info)
 if balance_sheet_df is not None and income_statement_df is not None:
     st.success("재무제표가 성공적으로 업로드되었습니다!")
 
-    # 주요 재무 지표 계산 (이전과 동일)
+    # 주요 재무 지표 계산
     total_assets = balance_sheet_df.loc['자산총계'] if '자산총계' in balance_sheet_df.index else pd.Series()
     total_liabilities = balance_sheet_df.loc['부채총계'] if '부채총계' in balance_sheet_df.index else pd.Series()
     total_equity = balance_sheet_df.loc['자본총계'] if '자본총계' in balance_sheet_df.index else pd.Series()
@@ -98,13 +98,13 @@ if balance_sheet_df is not None and income_statement_df is not None:
     net_income = net_income.fillna(0)
     revenue = revenue.fillna(0)
 
-    # 재무 비율 계산 (이전과 동일)
+    # 재무 비율 계산
     debt_ratio = (total_liabilities / total_assets * 100).replace([np.inf, -np.inf], np.nan).fillna(0)
     equity_ratio = (total_equity / total_assets * 100).replace([np.inf, -np.inf], np.nan).fillna(0)
     roe = (net_income / total_equity * 100).replace([np.inf, -np.inf], np.nan).fillna(0)
     profit_margin = (net_income / revenue * 100).replace([np.inf, -np.inf], np.nan).fillna(0)
     
-    # 결과 표시 (이전과 동일)
+    # 결과 표시
     st.header("📈 주요 재무 지표")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("총자산", f"{total_assets.iloc[-1]:,.0f}원", f"{total_assets.iloc[-1] - total_assets.iloc[-2]:,.0f}원")
@@ -119,7 +119,7 @@ if balance_sheet_df is not None and income_statement_df is not None:
     col3.metric("ROE", f"{roe.iloc[-1]:.2f}%", f"{roe.iloc[-1] - roe.iloc[-2]:.2f}%")
     col4.metric("순이익률", f"{profit_margin.iloc[-1]:.2f}%", f"{profit_margin.iloc[-1] - profit_margin.iloc[-2]:.2f}%")
     
-    # 그래프 그리기 (이전과 동일)
+    # 그래프 그리기
     st.header("📊 재무 지표 추이")
     fig = make_subplots(rows=2, cols=2, subplot_titles=("매출 및 순이익 추이", "자산/부채/자본 추이", "수익성 지표 추이", "재무 비율 추이"))
     
@@ -169,12 +169,13 @@ if balance_sheet_df is not None and income_statement_df is not None:
             message = client.messages.create(
                 model="claude-3-sonnet-20240229",
                 max_tokens=3000,
+                system=system_prompt,
                 messages=[
-                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": human_prompt}
                 ]
             )
-            st.write(message.content[0].text)
+            ai_analysis = message.content[0].text
+            st.write(ai_analysis)
         except anthropic.BadRequestError as e:
             st.error(f"API 요청 오류: {str(e)}")
         except Exception as e:
@@ -185,7 +186,7 @@ if balance_sheet_df is not None and income_statement_df is not None:
     st.write("AI 분석 리포트를 기반으로 추가 질문을 해보세요.")
 
     if "messages" not in st.session_state:
-        st.session_state.messages = []
+        st.session_state.messages = [{"role": "assistant", "content": ai_analysis}]
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -200,15 +201,14 @@ if balance_sheet_df is not None and income_statement_df is not None:
             message_placeholder = st.empty()
             full_response = ""
             try:
-                messages_for_api = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": human_prompt}
-                ] + st.session_state.messages
-
                 message = client.messages.create(
                     model="claude-3-sonnet-20240229",
                     max_tokens=1000,
-                    messages=messages_for_api
+                    system=system_prompt,
+                    messages=[
+                        {"role": "assistant", "content": ai_analysis},
+                        *st.session_state.messages
+                    ]
                 )
                 full_response = message.content[0].text
                 message_placeholder.markdown(full_response)
